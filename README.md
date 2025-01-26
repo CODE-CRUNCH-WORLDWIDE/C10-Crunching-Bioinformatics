@@ -15,7 +15,7 @@ This repository contains everything you’ll need throughout the course:
 ## 🗂️ Directory by Semester  
 Explore the course materials organized by semester below:
 
-- **Spring 2025**: [Spring 2025](https://github.com/CODE-CRUNCH-CLUB/C7-WIRE-CRUNCH-EMBEDDED-SYSTEMS/tree/main/SPRING-2025)   
+- **Spring 2025**: [Spring 2025](https://github.com/CODE-CRUNCH-CLUB/C10-Crunching-Bioinformatics/tree/main/SPRING-2025)   
 
 ## 🛠️ Course Highlights  
 - Learn the basics of **bioinformatics** and its role in analyzing biological data.
