@@ -1,3 +1,24 @@
+<!--
+This is a comment in Markdown.
+It will not be displayed in the rendered README.
+
+---
+
+## Unit 0: Course Overview
+
+- **Week Dates:** January 6, 2025 - January 10, 2025  
+- **Link to Slides:** [Unit 0 - Python Fundamentals.pptx](https://github.com/CODE-CRUNCH-CLUB)  
+
+### **Python Code Example**
+```python
+print("Hello, world!")
+```
+
+
+
+-->
+
+
 # C10 Crunching Bioinformatics
 
 Welcome to **C10 Crunching Bioinformatics**! This interactive course introduces students to bioinformatics using Python, emphasizing computational problem-solving, real-world applications, and collaborative project development. You'll gain hands-on experience analyzing biological data, building tools, and presenting your work professionally.
@@ -47,17 +68,18 @@ This repository contains everything you'll need throughout the course:
 ### Course Content - Spring 2025
 
 #### Unit 0: Course Overview
-- Week Dates: January 6, 2025 - January 10, 2025
-- Link to Slides: Unit 0 - Bioinformatics Overview.pptx
+- Week Dates: January 27, 2025 - January 31, 2025
+- **Link to Slides:** [Unit 0 - Introducing Coding Relevance to Biology.pptx](https://github.com/CODE-CRUNCH-CLUB)  
 
-Python Code Example:
+```python
+#Python Code Example:
 print("Welcome to Crunching Bioinformatics!")
 
-#### Unit 1: Sequence Analysis
-- Week Dates: January 13, 2025 - January 17, 2025
-- Link to Slides: Unit 1 - Sequence Analysis.pptx
+```
 
-Python Code Example:
+```python
+
+#Python Code Example:
 # Simple DNA Sequence Analysis
 
 def gc_content(sequence):
@@ -66,11 +88,11 @@ def gc_content(sequence):
 sequence = "AGCTATAG"
 print("GC Content:", gc_content(sequence))
 
-#### Unit 2: Data Visualization
-- Week Dates: January 20, 2025 - January 24, 2025
-- Link to Slides: Unit 2 - Data Visualization.pptx
+```
 
-Python Code Example:
+```python
+
+#Python Code Example Data Visualization:
 import matplotlib.pyplot as plt
 
 # Plot a simple bar chart for nucleotide frequencies
@@ -82,3 +104,8 @@ plt.xlabel("Nucleotide")
 plt.ylabel("Frequency")
 plt.title("Nucleotide Frequency")
 plt.show()
+
+```
+
+
+
