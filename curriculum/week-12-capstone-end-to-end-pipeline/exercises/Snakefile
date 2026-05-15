@@ -1,0 +1,195 @@
+# Snakefile - C10 Week 12 Exercises (toy RNA-seq quantification)
+#
+# Educational and research use only. Outputs are not clinical software.
+#
+# This Snakefile is the worked reference used by exercise-01. It runs
+# end to end on the small didactic dataset shipped in this folder:
+# 4 samples, 2 conditions, ~100k reads per sample, a chr21-only
+# transcriptome. Total runtime on a 4-core laptop: 3-6 minutes.
+#
+# Rules (top-down DAG):
+#
+#   all                                                          (terminal target)
+#    ├── results/tpm_matrix.tsv  ← aggregate_tpm
+#    ├── results/dge_top30.tsv   ← deseq2
+#    └── figures/volcano.png     ← deseq2
+#
+#   aggregate_tpm  ← quants/{sample}  ← salmon_quant  ← qc/{sample}_R*.fastq.gz  ← trim_fastq
+#   deseq2         ← quants/{sample}  (same)
+#   salmon_quant   ← ref/salmon_index  ← salmon_index  ← ref/transcripts.fa.gz
+#
+# Required tools (declare in environment.yml):
+#   fastp 0.23.4
+#   salmon 1.10.2
+#   bioconductor-tximport 1.30.0
+#   bioconductor-deseq2 1.42.0
+#   r-base 4.3.2
+#
+# Run:
+#   snakemake --cores 4 --use-conda
+#
+# Render DAG:
+#   snakemake --dag | dot -Tsvg > dag.svg
+
+import csv
+from pathlib import Path
+
+SAMPLE_SHEET = "samples.tsv"
+FASTQ_DIR = "data/fastq"
+REF_TRANSCRIPTS = "ref/transcripts.fa.gz"
+REF_TX2GENE = "ref/tx2gene.tsv"
+
+SAMPLES = []
+CONDITIONS = {}
+if Path(SAMPLE_SHEET).exists():
+    with open(SAMPLE_SHEET) as fh:
+        reader = csv.DictReader(fh, delimiter="\t")
+        for row in reader:
+            sid = row["sample_id"].strip()
+            cond = row.get("condition", "unknown").strip()
+            SAMPLES.append(sid)
+            CONDITIONS[sid] = cond
+
+
+rule all:
+    input:
+        "results/tpm_matrix.tsv",
+        "results/dge_top30.tsv",
+        "figures/volcano.png",
+        "figures/pca.png",
+        "results/run-info.json"
+
+
+rule trim_fastq:
+    """Adapter-trim and quality-filter paired-end reads with fastp."""
+    input:
+        r1 = FASTQ_DIR + "/{sample}_R1.fastq.gz",
+        r2 = FASTQ_DIR + "/{sample}_R2.fastq.gz"
+    output:
+        r1 = "qc/{sample}_R1.trim.fastq.gz",
+        r2 = "qc/{sample}_R2.trim.fastq.gz",
+        html = "qc/{sample}.fastp.html",
+        json = "qc/{sample}.fastp.json"
+    log:
+        "logs/fastp_{sample}.log"
+    threads: 4
+    resources:
+        mem_mb = 4000
+    conda:
+        "envs/fastp.yaml"
+    shell:
+        "fastp -i {input.r1} -I {input.r2} "
+        "-o {output.r1} -O {output.r2} "
+        "-h {output.html} -j {output.json} "
+        "--qualified_quality_phred 20 --length_required 25 "
+        "--thread {threads} 2> {log}"
+
+
+rule salmon_index:
+    """Build the Salmon decoy-aware transcriptome index."""
+    input:
+        REF_TRANSCRIPTS
+    output:
+        directory("ref/salmon_index")
+    log:
+        "logs/salmon_index.log"
+    threads: 4
+    resources:
+        mem_mb = 8000
+    conda:
+        "envs/salmon.yaml"
+    shell:
+        "salmon index -t {input} -i {output} -k 31 -p {threads} 2> {log}"
+
+
+rule salmon_quant:
+    """Quantify transcript abundance per sample with Salmon."""
+    input:
+        r1 = "qc/{sample}_R1.trim.fastq.gz",
+        r2 = "qc/{sample}_R2.trim.fastq.gz",
+        index_dir = "ref/salmon_index"
+    output:
+        directory("quants/{sample}")
+    log:
+        "logs/salmon_quant_{sample}.log"
+    threads: 4
+    resources:
+        mem_mb = 8000
+    conda:
+        "envs/salmon.yaml"
+    shell:
+        "salmon quant -i {input.index_dir} -l A "
+        "-1 {input.r1} -2 {input.r2} "
+        "-o {output} -p {threads} "
+        "--seqBias --gcBias --validateMappings 2> {log}"
+
+
+rule aggregate_tpm:
+    """Aggregate per-sample Salmon TPM into a wide TSV matrix."""
+    input:
+        quants = expand("quants/{sample}", sample=SAMPLES)
+    output:
+        "results/tpm_matrix.tsv"
+    log:
+        "logs/aggregate_tpm.log"
+    run:
+        import csv
+        import os
+        tpm = {}
+        for quant_dir in input.quants:
+            sample = os.path.basename(quant_dir)
+            path = os.path.join(quant_dir, "quant.sf")
+            with open(path) as fh:
+                reader = csv.DictReader(fh, delimiter="\t")
+                for row in reader:
+                    tpm.setdefault(row["Name"], {})[sample] = row["TPM"]
+        with open(output[0], "w") as fh:
+            writer = csv.writer(fh, delimiter="\t")
+            writer.writerow(["transcript_id"] + SAMPLES)
+            for tx in sorted(tpm):
+                writer.writerow([tx] + [tpm[tx].get(s, "0.0") for s in SAMPLES])
+
+
+rule deseq2:
+    """Aggregate transcripts to genes (tximport) and test DE (DESeq2)."""
+    input:
+        quants = expand("quants/{sample}", sample=SAMPLES),
+        sample_sheet = SAMPLE_SHEET,
+        tx2gene = REF_TX2GENE
+    output:
+        rds = "results/deseq2_results.rds",
+        top30 = "results/dge_top30.tsv",
+        volcano = "figures/volcano.png",
+        pca = "figures/pca.png"
+    log:
+        "logs/deseq2.log"
+    threads: 1
+    resources:
+        mem_mb = 4000
+    conda:
+        "envs/deseq2.yaml"
+    script:
+        "scripts/run_deseq2.R"
+
+
+onsuccess:
+    import json
+    import datetime
+    import hashlib
+    from pathlib import Path
+    info = {
+        "project": "C10-Week12-Exercises-Snakefile",
+        "version": "v1.0",
+        "run_date_utc": datetime.datetime.utcnow().isoformat(timespec="seconds") + "Z",
+        "samples": SAMPLES,
+        "conditions": CONDITIONS,
+        "snakefile_sha256": hashlib.sha256(Path("Snakefile").read_bytes()).hexdigest(),
+        "disclaimer": "Educational and research use only. Not validated for clinical use."
+    }
+    Path("results").mkdir(parents=True, exist_ok=True)
+    Path("results/run-info.json").write_text(json.dumps(info, indent=2, sort_keys=True))
+    print("[Snakefile] onsuccess: wrote results/run-info.json")
+
+
+onerror:
+    print("[Snakefile] onerror: pipeline failed; inspect logs/ for details")
